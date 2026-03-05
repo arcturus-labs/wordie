@@ -10,7 +10,7 @@ enum AppState {
 struct ContentView: View {
     @AppStorage("anthropicAPIKey") private var apiKey: String = ""
 
-    @State private var prompt: String = "Tighten up this text to keep the tone and meaning"
+    @State private var prompt: String = "Tighten up this text while keeping the tone and meaning"
     @State private var text: String = ""
     @State private var appState: AppState = .editing
     @State private var oldText: String = ""
@@ -35,7 +35,7 @@ struct ContentView: View {
 
                 Group {
                     if appState == .reviewing {
-                        EditableDiffView(oldText: oldText, newText: $newText)
+                        EditableDiffView(oldText: $oldText, newText: $newText)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6)
                                     .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
@@ -80,12 +80,12 @@ struct ContentView: View {
                     Text("Processing…")
                         .foregroundColor(.secondary)
                 } else if appState == .reviewing {
-                    Button("Reject") {
+                    Button("Reject All") {
                         reject()
                     }
                     .keyboardShortcut(.escape, modifiers: [])
 
-                    Button("Accept") {
+                    Button("Accept All") {
                         accept()
                     }
                     .keyboardShortcut(.return, modifiers: .command)
@@ -96,6 +96,11 @@ struct ContentView: View {
         .padding()
         .onAppear {
             loadClipboard()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            if appState == .editing {
+                loadClipboard()
+            }
         }
     }
 
