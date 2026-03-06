@@ -6,16 +6,17 @@ A lightweight macOS menubar app for refining text with Claude. Copy text to your
 
 **Requirements:** macOS 13+ and an [Anthropic API key](https://console.anthropic.com). Building requires Swift 5.9+ (Xcode 15+ or [swift.org](https://swift.org/download/)).
 
-**Build and install:**
+### Install as an app
 
 ```
 git clone <repo-url>
 cd wordie
-swift build -c release
-cp .build/release/Wordie /usr/local/bin/wordie
+./scripts/reinstall.sh
 ```
 
-**Or just run from source:**
+This builds a release binary, packages it as a macOS `.app` bundle with an icon, installs it to `/Applications`, and launches it. Run the same command any time you pull updates to rebuild and reinstall.
+
+### Or just run from source
 
 ```
 swift run Wordie

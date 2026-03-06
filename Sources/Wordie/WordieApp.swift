@@ -92,9 +92,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func showMainWindow() {
+        let wasHidden = mainWindow == nil || !mainWindow!.isVisible
         NSApp.activate(ignoringOtherApps: true)
         if let window = mainWindow {
             window.makeKeyAndOrderFront(nil)
+        }
+        if wasHidden {
+            NotificationCenter.default.post(name: .windowSummoned, object: nil)
         }
     }
 
@@ -187,4 +191,5 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
 extension Notification.Name {
     static let showAbout = Notification.Name("showAbout")
+    static let windowSummoned = Notification.Name("windowSummoned")
 }
