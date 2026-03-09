@@ -142,49 +142,44 @@ struct EditableDiffView: NSViewRepresentable {
         // MARK: Compute sites
 
         private func computeSites() -> [DiffSite] {
-            var result: [DiffSite] = []
-            var i = 0
-            var displayOffset = 0
+            // Delegate site-grouping and whitespace-gap merging to DiffEngine,
+            // then layer on display offsets (NSRange) which require iterating tokens.
+            let plans = DiffEngine.buildSitePlans(from: tokens)
 
-            while i < tokens.count {
-                if case .unchanged(let s) = tokens[i] {
-                    displayOffset += s.count
-                    i += 1
+            var sites: [DiffSite] = []
+            var displayOffset = 0
+            var planIdx = 0
+            var tokenIdx = 0
+
+            while tokenIdx < tokens.count {
+                guard planIdx < plans.count else {
+                    // No more sites; advance to consume remaining tokens
+                    if case .unchanged(let s) = tokens[tokenIdx] { displayOffset += s.count }
+                    tokenIdx += 1
                     continue
                 }
-
-                let start = i
-                let displayStart = displayOffset
-                var oldContent = ""
-                var newContent = ""
-
-                while i < tokens.count {
-                    switch tokens[i] {
-                    case .unchanged:
-                        break // exit inner loop
-                    case .removed(let s):
-                        oldContent += s
-                        displayOffset += s.count
-                        i += 1
-                        continue
-                    case .added(let s):
-                        newContent += s
-                        displayOffset += s.count
-                        i += 1
-                        continue
-                    }
-                    break
+                let plan = plans[planIdx]
+                if tokenIdx < plan.tokenStart {
+                    // Unchanged token before this site
+                    if case .unchanged(let s) = tokens[tokenIdx] { displayOffset += s.count }
+                    tokenIdx += 1
+                } else {
+                    // Block rendering: each site occupies exactly oldContent + newContent chars.
+                    let displayStart = displayOffset
+                    let displayLength = plan.oldContent.count + plan.newContent.count
+                    displayOffset += displayLength
+                    sites.append(DiffSite(
+                        tokenStart: plan.tokenStart,
+                        tokenEnd: plan.tokenEnd,
+                        displayRange: NSRange(location: displayStart, length: displayLength),
+                        oldContent: plan.oldContent,
+                        newContent: plan.newContent
+                    ))
+                    tokenIdx = plan.tokenEnd
+                    planIdx += 1
                 }
-
-                result.append(DiffSite(
-                    tokenStart: start,
-                    tokenEnd: i,
-                    displayRange: NSRange(location: displayStart, length: displayOffset - displayStart),
-                    oldContent: oldContent,
-                    newContent: newContent
-                ))
             }
-            return result
+            return sites
         }
 
         // MARK: Build attributed string
@@ -193,60 +188,47 @@ struct EditableDiffView: NSViewRepresentable {
             let attributed = NSMutableAttributedString()
             let baseFont = NSFont.systemFont(ofSize: 14)
 
-            // Map each token index to its site index (if any)
-            var tokenToSite: [Int: Int] = [:]
-            for (siteIdx, site) in sites.enumerated() {
-                for t in site.tokenStart..<site.tokenEnd {
-                    tokenToSite[t] = siteIdx
-                }
-            }
+            // Render by sites rather than token-by-token so that each merged site
+            // appears as one contiguous red block followed by one green block,
+            // instead of alternating red/green pairs for every changed word.
+            var tokenIdx = 0
+            var siteIdx = 0
 
-            for (tokenIdx, token) in tokens.enumerated() {
-                let isSelected = tokenToSite[tokenIdx] == selectedSiteIndex
+            while tokenIdx < tokens.count {
+                if siteIdx < sites.count, tokenIdx == sites[siteIdx].tokenStart {
+                    let site = sites[siteIdx]
+                    let isSelected = (siteIdx == selectedSiteIndex)
 
-                switch token {
-                case .unchanged(let s):
-                    attributed.append(NSAttributedString(string: s, attributes: [
-                        .font: baseFont,
-                        .foregroundColor: NSColor.textColor,
-                        kIsRemoved: false
-                    ]))
-
-                case .removed(let s):
-                    if isSelected {
-                        attributed.append(NSAttributedString(string: s, attributes: [
+                    if !site.oldContent.isEmpty {
+                        attributed.append(NSAttributedString(string: site.oldContent, attributes: [
                             .font: baseFont,
-                            .foregroundColor: NSColor.white,
+                            .foregroundColor: isSelected ? NSColor.white : NSColor.systemRed,
                             .strikethroughStyle: NSUnderlineStyle.single.rawValue,
-                            .backgroundColor: NSColor.systemRed,
-                            kIsRemoved: true
-                        ]))
-                    } else {
-                        attributed.append(NSAttributedString(string: s, attributes: [
-                            .font: baseFont,
-                            .foregroundColor: NSColor.systemRed,
-                            .strikethroughStyle: NSUnderlineStyle.single.rawValue,
-                            .backgroundColor: NSColor.systemRed.withAlphaComponent(0.1),
+                            .backgroundColor: isSelected ? NSColor.systemRed : NSColor.systemRed.withAlphaComponent(0.1),
                             kIsRemoved: true
                         ]))
                     }
-
-                case .added(let s):
-                    if isSelected {
-                        attributed.append(NSAttributedString(string: s, attributes: [
+                    if !site.newContent.isEmpty {
+                        attributed.append(NSAttributedString(string: site.newContent, attributes: [
                             .font: baseFont,
-                            .foregroundColor: NSColor.white,
-                            .backgroundColor: NSColor.systemGreen,
-                            kIsRemoved: false
-                        ]))
-                    } else {
-                        attributed.append(NSAttributedString(string: s, attributes: [
-                            .font: baseFont,
-                            .foregroundColor: NSColor.systemGreen,
-                            .backgroundColor: NSColor.systemGreen.withAlphaComponent(0.1),
+                            .foregroundColor: isSelected ? NSColor.white : NSColor.systemGreen,
+                            .backgroundColor: isSelected ? NSColor.systemGreen : NSColor.systemGreen.withAlphaComponent(0.1),
                             kIsRemoved: false
                         ]))
                     }
+
+                    tokenIdx = site.tokenEnd
+                    siteIdx += 1
+                } else {
+                    // Unchanged token outside any site
+                    if case .unchanged(let s) = tokens[tokenIdx] {
+                        attributed.append(NSAttributedString(string: s, attributes: [
+                            .font: baseFont,
+                            .foregroundColor: NSColor.textColor,
+                            kIsRemoved: false
+                        ]))
+                    }
+                    tokenIdx += 1
                 }
             }
             return attributed

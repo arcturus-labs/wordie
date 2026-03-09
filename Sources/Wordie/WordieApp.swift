@@ -150,8 +150,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         ⌘,    Settings
         """
 
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
         let alert = NSAlert()
-        alert.messageText = "Wordie"
+        alert.messageText = "Wordie \(version)"
         alert.informativeText = """
         Refine text with Claude, review word-level diffs, and accept or reject changes individually or all at once.
 

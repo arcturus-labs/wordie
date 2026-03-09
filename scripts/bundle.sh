@@ -3,7 +3,7 @@ set -e
 
 APP_NAME="Wordie"
 BUNDLE_ID="com.wordie.app"
-VERSION="1.0.0"
+VERSION=$(git rev-parse --short HEAD 2>/dev/null || echo "dev")
 BUILD_DIR=".build/release"
 APP_DIR="build/${APP_NAME}.app"
 
